@@ -1,0 +1,45 @@
+---
+- name: Obtener días festivos según el país y el año actual
+  hosts: localhost
+  gather_facts: false
+  vars:
+    country: "colombia"
+  tasks:
+
+  - name: Días Festivos | Recolecta fact en especifico de fecha.
+    setup:
+      gather_subset:
+        - '!all'
+        - '!min'
+        - date_time 
+    async: 100
+    poll: 1
+
+  - name: Días Festivos | Obtiene año actual.
+    set_fact:
+      year: "{{ ansible_date_time.year }}"
+
+  - name: Días Festivos | Consulta información de los días festivos según el país.
+    uri:
+      url: "https://www.timeanddate.com/holidays/{{ country | lower }}/{{ year }}"
+      return_content: true
+      headers:
+        User-Agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    register: consulta
+
+  - name: Días Festivos | Filtrar días.
+    set_fact:
+      days: "{{ consulta.content | regex_findall('(?s)<th class=\"nw\" >(.*?)</th>','\\1') }}"
+
+  - name: Días Festivos | Modela fecha en formato %Y %m %d.
+    set_fact:
+      holidays: "{{ holidays | default([]) + ['%Y-%m-%d' | strftime(( date | to_datetime('%d %b %Y')).strftime('%s'))] }}"
+    loop: "{{ days }}"
+    vars:
+      date: "{{ item + ' ' + year | string }}"
+    no_log: true
+
+  - name: Días Festivos | Muestra fechas festivas
+    debug:
+      msg: "{{ holidays }}"
+...
